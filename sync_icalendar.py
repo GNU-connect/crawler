@@ -8,9 +8,9 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from src.utils.supabase import get_supabase_client
+from src.utils.database import get_supabase_client
 from dotenv import load_dotenv
-from src.utils.slack import Slack_Notifier
+from src.utils.notifications import send_slack_notification
 load_dotenv(verbose=True)
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
@@ -27,8 +27,7 @@ def authenticate_google_calendar():
         else:
             # 환경 변수에서 JSON 문자열을 가져오기
             client_secret_json_str = os.getenv("GOOGLE_CALENDAR_CLIENT_SECRET")
-            
-            # JSON 문자열을 파이썬 딕셔너리로 변환
+            client_secret_json_str = client_secret_json_str.encode('utf-8').decode('unicode_escape')
             client_secret_data = json.loads(client_secret_json_str)
             
             # from_client_config를 사용하여 인증 흐름 생성
@@ -53,7 +52,8 @@ def sync_icalendar():
               'end': {'dateTime': end_datetime.isoformat()},
           }
           try:
-              service.events().insert(calendarId=calendar_id, body=event).execute()
+              response = service.events().insert(calendarId=calendar_id, body=event).execute()
+              print(response)
           except HttpError as error:
               print(f"Failed to add event: {error}")
               continue
@@ -75,8 +75,8 @@ def sync_icalendar():
       service = authenticate_google_calendar()
 
       # 경상대 학부생 학사일정
-      calendar_undergraduate_id = os.getenv("GOOGLE_CALENDAR_UNDERGRADUATE_ID")
-      delete_all_events(service, calendar_undergraduate_id)
+      calendar_undergraduate_id = os.getenv("GOOGLE_CALENDAR_UNDERGRADUATE_ID2")
+    #   delete_all_events(service, calendar_undergraduate_id)
       undergraduate_data = get_academic_calendar_data(1)
       add_events_to_calendar(service, calendar_undergraduate_id, undergraduate_data)
 
@@ -84,7 +84,7 @@ def sync_icalendar():
     except Exception as e:
       error_message = f'i캘린더 동기화 실패: i캘린더를 {e}의 사유로 동기화하지 못했습니다.'
       print(error_message)
-      Slack_Notifier().fail(error_message)
+      send_slack_notification().fail(error_message)
       traceback.print_exc()
       return None
 
